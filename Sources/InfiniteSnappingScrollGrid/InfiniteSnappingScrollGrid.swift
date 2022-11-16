@@ -60,11 +60,11 @@ public struct InfiniteSnappingScrollGrid<Item: Hashable, Identifier: Hashable, C
 
             #if targetEnvironment(macCatalyst)
             PanningContainer {
-                content(itemSize: rowHeight)
+                content(itemSize: itemSize)
             } onChanged: { translation in
-                handleScrollChanged(with: translation, itemSize: rowHeight)
+                handleScrollChanged(with: translation, itemSize: itemSize)
             } onEnded: { translation in
-                handleScrollEnded(with: translation, itemSize: rowHeight)
+                handleScrollEnded(with: translation, itemSize: itemSize)
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
             #else
