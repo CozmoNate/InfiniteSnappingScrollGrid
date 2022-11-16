@@ -4,7 +4,7 @@
 ![Language](https://img.shields.io/badge/swift-5.7-orange.svg)
 ![Framework](https://img.shields.io/badge/swiftui-2.0-yellowgreen.svg)
 
-A grid that allows to scroll infinite items horizontally or vertically.  
+A grid that allows a two-way scroll of an infinite number of items using SwiftUI 2+.  
 
 ## Installation
 
