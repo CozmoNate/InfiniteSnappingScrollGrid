@@ -409,7 +409,7 @@ fileprivate struct PanningContainer<Content: View>: UIViewControllerRepresentabl
             if let target {
                 let point = sender.translation(in: target)
                 let translation = CGSize(width: point.x, height: point.y)
-                if abs(max(translation.width, translation.height)) > 8 {
+                if max(abs(translation.width), abs(translation.height)) > 8 {
                     switch sender.state {
                     case .began, .changed:
                         onChanged?(translation)
@@ -435,29 +435,39 @@ struct InfiniteSnappingScrollGrid_Previews: PreviewProvider {
         Preview()
     }
     
+
+    
     struct Preview: View {
         
+        static var ordinalListItemFormatter: NumberFormatter {
+            let formatter = NumberFormatter()
+            formatter.formattingContext = .listItem
+            formatter.numberStyle = .ordinal
+            return formatter
+        }
+        
         @State
-        var items = ["one", "two", "three"]
+        var items = [1, 2, 3]
         
         var body: some View {
             VStack {
                 
-                Text("[\(String(items.joined(by: ", ")))]")
+                Text("Visible items: [\(String(items.map({ String($0) }).joined(by: ", ")))]")
                     .lineLimit(1)
                     .padding()
                     .zIndex(1)
                 
                 InfiniteSnappingScrollGrid($items, alignment: .vertical) { item, index in
-                    Text(item)
+                    let title = item == 0 ? "Zero" : "\(Preview.ordinalListItemFormatter.string(from: NSNumber(integerLiteral: item)) ?? String(item))"
+                    Text(title)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .padding()
                         .background(Color(.systemBackground))
                         .border(.red)
                 } itemBefore: { item in
-                    "\(item).before"
+                    item - 1
                 } itemAfter: { item in
-                    "\(item).after"
+                    item + 1
                 }
                 .border(.blue)
                 .padding(.bottom, 16)
