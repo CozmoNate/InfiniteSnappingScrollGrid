@@ -36,13 +36,15 @@ public struct InfiniteSnappingScrollGrid<Item: Hashable, Identifier: Hashable, C
     private let itemContent: (Item, Int) -> Content
     private let itemBefore: (Item) -> Item
     private let itemAfter: (Item) -> Item
-    private let onItemsChanged: (([Item]) -> Void)?
     
     @State
     private var actualItems: [Item] = []
     
     @State
     private var itemPositions: [Int] = []
+    
+    @State
+    private var dragMinimumDistance: CGFloat = 10
     
     @State
     private var dragStart: CGFloat = 0
@@ -58,28 +60,43 @@ public struct InfiniteSnappingScrollGrid<Item: Hashable, Identifier: Hashable, C
             
             let itemSize = alignedAxis(from:  geometry.size) / CGFloat(referenceItems.count)
 
-            #if targetEnvironment(macCatalyst)
-            PanningContainer {
-                content(itemSize: itemSize)
-            } onChanged: { translation in
-                handleScrollChanged(with: translation, itemSize: itemSize)
-            } onEnded: { translation in
-                handleScrollEnded(with: translation, itemSize: itemSize)
+            ZStack(alignment: .topLeading) {
+                ForEach(Array(itemPositions.enumerated()), id: \.element) { index, position in
+                    
+                    let rowOffset = CGFloat(index - 1) * itemSize + dragOffset - dragStart
+                        
+                    itemContent(actualItems[position], index - 1)
+                        .transaction { transaction in
+                            if dismantleIndex == index {
+                                transaction.animation = nil
+                                transaction.disablesAnimations = true
+                            }
+                        }
+                        .offset(
+                            x: alignedAxis(from: rowOffset, direction: .horizontal),
+                            y: alignedAxis(from: rowOffset, direction: .vertical)
+                        )
+                        .frame(
+                            width: alignedAxis(from: itemSize, direction: .horizontal),
+                            height: alignedAxis(from: itemSize, direction: .vertical)
+                        )
+                        .frame(
+                            maxWidth: reversedAxis(from: .infinity, direction: .horizontal),
+                            maxHeight: reversedAxis(from: .infinity, direction: .vertical)
+                        )
+                }
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
-            #else
-            content(itemSize: itemSize)
-                .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 16, coordinateSpace: .local)
-                        .onChanged { value in
-                            handleScrollChanged(with: value.translation, itemSize: itemSize)
-                        }
-                        .onEnded { value in
-                            handleScrollEnded(with: value.translation, itemSize: itemSize)
-                        }
-                )
-            #endif
+            .simultaneousGesture(
+                DragGesture(minimumDistance: dragMinimumDistance, coordinateSpace: .local)
+                    .onChanged { value in
+                        handleScrollChanged(with: value.translation, itemSize: itemSize)
+                    }
+                    .onEnded { value in
+                        handleScrollEnded(with: value.translation, itemSize: itemSize)
+                    }
+            )
+
         }
         .onAppear {
             refreshRowsAndPositions(with: referenceItems)
@@ -109,15 +126,12 @@ public struct InfiniteSnappingScrollGrid<Item: Hashable, Identifier: Hashable, C
         self.itemContent = itemContent
         self.itemBefore = itemBefore
         self.itemAfter = itemAfter
-        self.onItemsChanged = onItemsChanged
     }
     
     private func refreshRowsAndPositions(with rows: [Item]) {
         actualItems = assembleItems(fromReferenceItems: rows)
         itemPositions = Array(actualItems.indices)
-        let visibleRows = visibleItems(fromAllItems: actualItems, at: itemPositions)
-        onItemsChanged?(visibleRows)
-        referenceItems = visibleRows
+        referenceItems = visibleItems(fromAllItems: actualItems, at: itemPositions)
     }
     
     private func alignedAxis(from size: CGSize) -> CGFloat {
@@ -141,49 +155,11 @@ public struct InfiniteSnappingScrollGrid<Item: Hashable, Identifier: Hashable, C
         }
     }
     
-    private func reversedAxis(from size: CGSize) -> CGFloat {
-        switch alignment {
-        case .horizontal: return size.height
-        case .vertical: return size.width
-        }
-    }
-    
     private func reversedAxis(from size: CGFloat, direction: Axis) -> CGFloat? {
         switch (alignment, direction) {
         case (.horizontal, .horizontal), (.vertical, .vertical): return nil
         case (.horizontal, .vertical), (.vertical, .horizontal): return size
         }
-    }
-    
-    @ViewBuilder
-    private func content(itemSize: CGFloat) -> some View {
-        ZStack(alignment: .topLeading) {
-            ForEach(Array(itemPositions.enumerated()), id: \.element) { index, position in
-                
-                let rowOffset = CGFloat(index - 1) * itemSize + dragOffset - dragStart
-                    
-                itemContent(actualItems[position], index - 1)
-                    .transaction { transaction in
-                        if dismantleIndex == index {
-                            transaction.animation = nil
-                            transaction.disablesAnimations = true
-                        }
-                    }
-                    .offset(
-                        x: alignedAxis(from: rowOffset, direction: .horizontal),
-                        y: alignedAxis(from: rowOffset, direction: .vertical)
-                    )
-                    .frame(
-                        width: alignedAxis(from: itemSize, direction: .horizontal),
-                        height: alignedAxis(from: itemSize, direction: .vertical)
-                    )
-                    .frame(
-                        maxWidth: reversedAxis(from: .infinity, direction: .horizontal),
-                        maxHeight: reversedAxis(from: .infinity, direction: .vertical)
-                    )
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
     
     private func handleScrollChanged(with translation: CGSize, itemSize: CGFloat) {
@@ -225,10 +201,7 @@ public struct InfiniteSnappingScrollGrid<Item: Hashable, Identifier: Hashable, C
         actualItems = updatedRows
         itemPositions = updatedPositions
         dismantleIndex = updatedPositions.endIndex - 1
-        
-        let visibleRows = visibleItems(fromAllItems: updatedRows, at: updatedPositions)
-        onItemsChanged?(visibleRows)
-        referenceItems = visibleRows
+        referenceItems = visibleItems(fromAllItems: updatedRows, at: updatedPositions)
     }
     
     private func dismantleLaterItem() {
@@ -241,10 +214,7 @@ public struct InfiniteSnappingScrollGrid<Item: Hashable, Identifier: Hashable, C
         actualItems = updatedRows
         itemPositions = updatedPositions
         dismantleIndex = updatedPositions.startIndex
-        
-        let visibleRows = visibleItems(fromAllItems: updatedRows, at: updatedPositions)
-        onItemsChanged?(visibleRows)
-        referenceItems = visibleRows
+        referenceItems = visibleItems(fromAllItems: updatedRows, at: updatedPositions)
     }
     
     private func assembleItems(fromReferenceItems referenceItems: [Item]) -> [Item] {
@@ -256,6 +226,16 @@ public struct InfiniteSnappingScrollGrid<Item: Hashable, Identifier: Hashable, C
         itemPositions[(itemPositions.startIndex + 1)...(itemPositions.endIndex - 2)].map {
             allItems[$0]
         }
+    }
+}
+
+public extension InfiniteSnappingScrollGrid {
+    
+    /// Changes scroll gesture minimum distance
+    /// - Parameter distance: The minimum dragging distance for the scroll gesture to start scrolling the content.
+    func scrollGestureMinimumDistance(_ distance: CGFloat) -> Self {
+        dragMinimumDistance = distance
+        return self
     }
 }
 
@@ -351,100 +331,13 @@ public extension InfiniteSnappingScrollGrid where Item: Identifiable, Item.ID ==
     }
 }
 
-fileprivate struct PanningContainer<Content: View>: UIViewControllerRepresentable {
-    
-    let content: Content
-    let onChanged: (CGSize) -> Void
-    let onEnded: (CGSize) -> Void
-    
-    init(@ViewBuilder _ content: () -> Content,
-         onChanged: @escaping (CGSize) -> Void,
-         onEnded: @escaping(CGSize) -> Void) {
-        self.content = content()
-        self.onChanged = onChanged
-        self.onEnded = onEnded
-    }
-    
-    func makeUIViewController(context: Context) -> UIHostingController<Content> {
-        let contentController = UIHostingController(rootView: content)
-        
-        contentController.loadView()
-        
-        let panGesture = UIPanGestureRecognizer(
-            target: context.coordinator,
-            action: #selector(Coordinator.handlePan(sender:))
-        )
-        panGesture.allowedScrollTypesMask = [.continuous, .discrete]
-        
-        contentController.view.addGestureRecognizer(panGesture)
-        
-        return contentController
-    }
-    
-    func updateUIViewController(_ uiViewController: UIHostingController<Content>, context: Context) {
-        uiViewController.view.gestureRecognizers?.forEach {
-            $0.delegate = context.coordinator
-        }
-        uiViewController.rootView = content
-        context.coordinator.target = uiViewController.viewIfLoaded
-        context.coordinator.onChanged = onChanged
-        context.coordinator.onEnded = onEnded
-    }
-    
-    func makeCoordinator() -> Coordinator {
-        let coordinator = Coordinator()
-        coordinator.onChanged = onChanged
-        coordinator.onEnded = onEnded
-        return coordinator
-    }
-    
-    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        
-        var target: UIView?
-        
-        var onChanged: ((CGSize) -> Void)?
-        var onEnded: ((CGSize) -> Void)?
-        
-        @objc func handlePan(sender: UIPanGestureRecognizer) {
-            if let target {
-                let point = sender.translation(in: target)
-                let translation = CGSize(width: point.x, height: point.y)
-                if max(abs(translation.width), abs(translation.height)) > 8 {
-                    switch sender.state {
-                    case .began, .changed:
-                        onChanged?(translation)
-                    case .ended:
-                        onEnded?(translation)
-                    default:
-                        break
-                    }
-                }
-            }
-        }
-        
-        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
-                               shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-            return true
-        }
-    }
-}
-
 struct InfiniteSnappingScrollGrid_Previews: PreviewProvider {
     
     static var previews: some View {
         Preview()
     }
     
-
-    
     struct Preview: View {
-        
-        static var ordinalListItemFormatter: NumberFormatter {
-            let formatter = NumberFormatter()
-            formatter.formattingContext = .listItem
-            formatter.numberStyle = .ordinal
-            return formatter
-        }
         
         @State
         var items = [1, 2, 3]
@@ -458,8 +351,7 @@ struct InfiniteSnappingScrollGrid_Previews: PreviewProvider {
                     .zIndex(1)
                 
                 InfiniteSnappingScrollGrid($items, alignment: .vertical) { item, index in
-                    let title = item == 0 ? "Zero" : "\(Preview.ordinalListItemFormatter.string(from: NSNumber(integerLiteral: item)) ?? String(item))"
-                    Text(title)
+                    Text(String(item))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .padding()
                         .background(Color(.systemBackground))

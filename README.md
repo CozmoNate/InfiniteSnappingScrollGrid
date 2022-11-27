@@ -34,6 +34,8 @@ Example code:
                 // Returns new item that is positioned after designated item
                 "\(item).after"
             }
+            // Perform scroll immediately. Small values improves scroll responsiveness but can break drag-and-drop gestures.  
+            .scrollGestureMinimumDistance(0)
         }
     
 ```
