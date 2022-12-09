@@ -22,7 +22,6 @@
  */
 
 
-import UIKit
 import SwiftUI
 import Algorithms
 
@@ -96,7 +95,6 @@ public struct InfiniteSnappingScrollGrid<Item: Hashable, Identifier: Hashable, C
                         handleScrollEnded(with: value.translation, itemSize: itemSize)
                     }
             )
-
         }
         .onAppear {
             refreshRowsAndPositions(with: referenceItems)
@@ -176,11 +174,7 @@ public struct InfiniteSnappingScrollGrid<Item: Hashable, Identifier: Hashable, C
     
     private func handleScrollEnded(with translation: CGSize, itemSize: CGFloat) {
         withAnimation(.easeOut(duration: 0.2)) {
-            #if targetEnvironment(macCatalyst)
-            let threshold = CGFloat(8)
-            #else
             let threshold = itemSize / 2
-            #endif
             if dragOffset > threshold {
                 dismantleLaterItem()
             } else if dragOffset < -threshold {

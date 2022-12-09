@@ -7,8 +7,6 @@ let package = Package(
     name: "InfiniteSnappingScrollGrid",
     platforms: [
         .iOS(.v14),
-        .macCatalyst(.v14),
-        .macOS(.v10_13),
         .watchOS(.v8),
         .tvOS(.v13)
     ],
