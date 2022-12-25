@@ -6,9 +6,10 @@ import PackageDescription
 let package = Package(
     name: "InfiniteSnappingScrollGrid",
     platforms: [
-        .iOS(.v14),
-        .watchOS(.v8),
-        .tvOS(.v13)
+        .iOS(.v15),
+        .watchOS(.v9),
+        .macCatalyst(.v16),
+        .tvOS(.v15)
     ],
     products: [
         // Products define the executables and libraries a package produces, and make them visible to other packages.
