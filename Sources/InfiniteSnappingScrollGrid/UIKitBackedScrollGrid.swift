@@ -88,7 +88,7 @@ public struct UIKitBackedScrollGrid<Item: Hashable, Identifier: Hashable, Conten
                     }
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
         }
     }
     
@@ -171,7 +171,7 @@ public struct UIKitBackedScrollGrid<Item: Hashable, Identifier: Hashable, Conten
     
     private func handleScrollChanged(with translation: CGSize, itemSize: CGFloat) {
         let offset = alignedAxis(from: translation)
-        if offset < 0 {
+        if offset <= 0 {
             scrollOffset = alignedSize(from: itemSize)
             dismantleLaterItem()
         }
