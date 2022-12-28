@@ -25,7 +25,6 @@
 import SwiftUI
 import Algorithms
 
-@MainActor
 public struct UIKitBackedScrollGrid<Item: Hashable, Identifier: Hashable, Content: View>: View {
     
     @Binding
@@ -48,7 +47,7 @@ public struct UIKitBackedScrollGrid<Item: Hashable, Identifier: Hashable, Conten
     @State
     private var scrollMinimumDistance: CGFloat = 10
     
-    public var body: some View {
+    @MainActor public var body: some View {
         GeometryReader { geometry in
             
             let itemSize = alignedAxis(from: geometry.size) / CGFloat(referenceItems.count)
@@ -266,7 +265,9 @@ struct WrappedScrollView<Content: View>: UIViewControllerRepresentable {
     }
 
     class Controller: NSObject, UIScrollViewDelegate {
+        
         var parent: WrappedScrollView<Content>
+        
         init(parent: WrappedScrollView<Content>) {
             self.parent = parent
         }

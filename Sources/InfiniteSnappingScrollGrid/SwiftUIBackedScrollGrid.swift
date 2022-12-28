@@ -25,7 +25,6 @@
 import SwiftUI
 import Algorithms
 
-@MainActor
 public struct SwiftUIBackedScrollGrid<Item: Hashable, Identifier: Hashable, Content: View>: View {
     
     @Binding
@@ -51,7 +50,7 @@ public struct SwiftUIBackedScrollGrid<Item: Hashable, Identifier: Hashable, Cont
     @State
     private var dismantleIndex: Int?
     
-    public var body: some View {
+    @MainActor public var body: some View {
         GeometryReader { geometry in
             
             let itemSize = alignedAxis(from:  geometry.size) / CGFloat(referenceItems.count)

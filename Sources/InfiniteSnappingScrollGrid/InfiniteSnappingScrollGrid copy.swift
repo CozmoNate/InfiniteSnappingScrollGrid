@@ -25,8 +25,15 @@
 import SwiftUI
 import Algorithms
 
-@MainActor
 public struct InfiniteSnappingScrollGrid<Item: Hashable, Identifier: Hashable, Content: View>: View {
+    
+    #if targetEnvironment(macCatalyst)
+    @AppStorage("infiniteSnappingScrollGridUIKitWorkaround")
+    var enableUIKitWorkaround = false
+    #else
+    @AppStorage("infiniteSnappingScrollGridUIKitWorkaround")
+    var enableUIKitWorkaround = false
+    #endif
     
     @Binding
     private var referenceItems: [Item]
@@ -36,8 +43,8 @@ public struct InfiniteSnappingScrollGrid<Item: Hashable, Identifier: Hashable, C
     private let itemBefore: (Item) -> Item
     private let itemAfter: (Item) -> Item
     
-    public var body: some View {
-        #if targetEnvironment(macCatalyst)
+    @MainActor public var body: some View {
+        if enableUIKitWorkaround {
             UIKitBackedScrollGrid(
                 referenceRows: $referenceItems,
                 identifierKeyPath: identifierKeyPath,
@@ -46,7 +53,7 @@ public struct InfiniteSnappingScrollGrid<Item: Hashable, Identifier: Hashable, C
                 itemBefore: itemBefore,
                 itemAfter: itemAfter
             )
-        #else
+        } else {
             SwiftUIBackedScrollGrid(
                 referenceRows: $referenceItems,
                 identifierKeyPath: identifierKeyPath,
@@ -55,7 +62,7 @@ public struct InfiniteSnappingScrollGrid<Item: Hashable, Identifier: Hashable, C
                 itemBefore: itemBefore,
                 itemAfter: itemAfter
             )
-        #endif
+        }
     }
     
     fileprivate init(
