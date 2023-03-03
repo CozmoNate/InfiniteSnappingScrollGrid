@@ -25,7 +25,7 @@
 import SwiftUI
 import Algorithms
 
-public struct SwiftUIBackedScrollGrid<Item: Hashable, Identifier: Hashable, Content: View>: View {
+public struct InfiniteSnappingScrollGrid<Item: Hashable, Identifier: Hashable, Content: View>: View {
     
     @Binding
     private var referenceItems: [Item]
@@ -48,18 +48,21 @@ public struct SwiftUIBackedScrollGrid<Item: Hashable, Identifier: Hashable, Cont
     private var dragOffset: CGFloat = 0
     
     @State
+    private var isLocked = false
+    
+    @State
     private var dismantleIndex: Int?
     
     @MainActor public var body: some View {
         GeometryReader { geometry in
             
             let itemSize = alignedAxis(from:  geometry.size) / CGFloat(referenceItems.count)
-
+            
             ZStack(alignment: .topLeading) {
                 ForEach(Array(itemPositions.enumerated()), id: \.element) { index, position in
                     
                     let rowOffset = CGFloat(index - 1) * itemSize + dragOffset - dragStart
-                        
+                    
                     itemContent(actualItems[position], index - 1)
                         .transaction { transaction in
                             if dismantleIndex == index {
@@ -73,22 +76,22 @@ public struct SwiftUIBackedScrollGrid<Item: Hashable, Identifier: Hashable, Cont
                         )
                         .frame(
                             width: alignedAxis(from: itemSize, direction: .horizontal) ??
-                                reversedAxis(from: geometry.size.width, direction: .horizontal),
+                            reversedAxis(from: geometry.size.width, direction: .horizontal),
                             height: alignedAxis(from: itemSize, direction: .vertical) ??
-                                reversedAxis(from: geometry.size.height, direction: .vertical)
+                            reversedAxis(from: geometry.size.height, direction: .vertical)
                         )
                 }
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
             .simultaneousGesture(
-                DragGesture(coordinateSpace: .local)
+                DragGesture()
                     .onChanged { value in
                         handleScrollChanged(with: value.translation, itemSize: itemSize)
                     }
                     .onEnded { value in
                         handleScrollEnded(with: value.translation, itemSize: itemSize)
-                    }
-            )
+                    },
+                including: isLocked ? .gesture : .all)
         }
         .onAppear {
             refreshRowsAndPositions(with: referenceItems)
@@ -132,6 +135,13 @@ public struct SwiftUIBackedScrollGrid<Item: Hashable, Identifier: Hashable, Cont
         }
     }
     
+    private func reversedAxis(from size: CGSize) -> CGFloat {
+        switch alignment {
+        case .horizontal: return size.height
+        case .vertical: return size.width
+        }
+    }
+    
     private func alignedAxis(from size: CGFloat, direction: Axis) -> CGFloat {
         switch (alignment, direction) {
         case (.horizontal, .horizontal), (.vertical, .vertical): return size
@@ -154,8 +164,16 @@ public struct SwiftUIBackedScrollGrid<Item: Hashable, Identifier: Hashable, Cont
     }
     
     private func handleScrollChanged(with translation: CGSize, itemSize: CGFloat) {
-        dragOffset = alignedAxis(from: translation)
-        let relativeOffset = dragOffset - dragStart
+        let axisOffset = alignedAxis(from: translation)
+        
+        guard isLocked || abs(axisOffset) > abs(reversedAxis(from: translation)) else {
+            return
+        }
+        
+        isLocked = true
+        dragOffset = axisOffset
+        
+        let relativeOffset = axisOffset - dragStart
         if relativeOffset >= itemSize {
             dragStart += itemSize
             dismantleLaterItem()
@@ -175,6 +193,7 @@ public struct SwiftUIBackedScrollGrid<Item: Hashable, Identifier: Hashable, Cont
             }
             dragOffset = 0
             dragStart = 0
+            isLocked = false
         }
     }
     
@@ -216,7 +235,100 @@ public struct SwiftUIBackedScrollGrid<Item: Hashable, Identifier: Hashable, Cont
     }
 }
 
-struct SwiftUIBackedScrollGrid_Previews: PreviewProvider {
+private extension Axis {
+    
+    var edgeSet: Edge.Set {
+        switch self {
+        case .horizontal: return .horizontal
+        case .vertical: return .vertical
+        }
+    }
+}
+
+public extension InfiniteSnappingScrollGrid {
+    
+    /// Creates a grid that identifies its items based on a key path to the identifier of the underlying item data
+    /// - Parameters:
+    ///   - items: The initial items & a binding to the array of displayed items.
+    ///   - id: The key path to the item identifier.
+    ///   - alignment: The items alignment axis. Also defines allowed scroll axis.
+    ///   - itemContent: A view builder that creates the view for a single item. The index of the item is relative to items displayed and goes beyond the bounds of displayed items array.
+    ///   - itemBefore: An item provider that returns previous item positioned before designed item.
+    ///   - itemAfter: An item provider that returns next item positioned after designed item.
+    init(
+        _ items: Binding<[Item]>,
+        id: KeyPath<Item, Identifier>,
+        alignment: Axis = .vertical,
+        @ViewBuilder itemContent: @escaping (Item, Int) -> Content,
+        itemBefore: @escaping (Item) -> Item,
+        itemAfter: @escaping (Item) -> Item
+    ) {
+        self = Self.init(
+            referenceRows: items,
+            identifierKeyPath: id,
+            alignment: alignment,
+            itemContent: itemContent,
+            itemBefore: itemBefore,
+            itemAfter: itemAfter
+        )
+    }
+}
+
+public extension InfiniteSnappingScrollGrid where Item == Identifier {
+
+    /// Creates a grid based on a collection of identifiable items
+    /// - Parameters:
+    ///   - items: The initial items & a binding to the array of displayed items.
+    ///   - alignment: The items alignment axis. Also defines allowed scroll axis.
+    ///   - itemContent: A view builder that creates the view for a single item. The index of the item is relative to items displayed and goes beyond the bounds of displayed items array.
+    ///   - itemBefore: An item provider that returns previous item positioned before designed item.
+    ///   - itemAfter: An item provider that returns next item positioned after designed item.
+    init(
+        _ items: Binding<[Item]>,
+        alignment: Axis = .vertical,
+        @ViewBuilder itemContent: @escaping (Item, Int) -> Content,
+        itemBefore: @escaping (Item) -> Item,
+        itemAfter: @escaping (Item) -> Item
+    ) {
+        self = Self.init(
+            referenceRows: items,
+            identifierKeyPath: \.self,
+            alignment: alignment,
+            itemContent: itemContent,
+            itemBefore: itemBefore,
+            itemAfter: itemAfter
+        )
+    }
+}
+
+public extension InfiniteSnappingScrollGrid where Item: Identifiable, Item.ID == Identifier {
+
+    /// Creates a grid based on a collection of identifiable items
+    /// - Parameters:
+    ///   - items: The initial items & a binding to the array of displayed items.
+    ///   - alignment: The items alignment axis. Also defines allowed scroll axis.
+    ///   - itemContent: A view builder that creates the view for a single item. The index of the item is relative to items displayed and goes beyond the bounds of displayed items array.
+    ///   - itemBefore: An item provider that returns previous item positioned before designed item.
+    ///   - itemAfter: An item provider that returns next item positioned after designed item.
+    init(
+        _ items: Binding<[Item]>,
+        alignment: Axis = .vertical,
+        @ViewBuilder itemContent: @escaping (Item, Int) -> Content,
+        itemBefore: @escaping (Item) -> Item,
+        itemAfter: @escaping (Item) -> Item
+    ) {
+        self = Self.init(
+            referenceRows: items,
+            identifierKeyPath: \.id,
+            alignment: alignment,
+            itemContent: itemContent,
+            itemBefore: itemBefore,
+            itemAfter: itemAfter
+        )
+    }
+}
+
+struct InfiniteSnappingScrollGrid_Previews: PreviewProvider {
     
     static var previews: some View {
         Preview()
@@ -224,8 +336,38 @@ struct SwiftUIBackedScrollGrid_Previews: PreviewProvider {
     
     struct Preview: View {
         
+        struct Item: View {
+            
+            var value: Int
+            
+            @State
+            var isSelected = false
+            
+            @State
+            var offset = CGSize.zero
+            
+            var body: some View {
+                Text(String(value))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .offset(offset)
+                    .padding()
+                    .background(isSelected ? Color(.secondarySystemBackground) : Color(.systemBackground))
+                    .border(.red)
+                    .onTapGesture {
+                        isSelected.toggle()
+                    }
+                    .gesture(DragGesture().onChanged { payload in
+                        offset = payload.translation
+                    }.onEnded{ _ in
+                        offset = .zero
+                    })
+            }
+        }
+        
         @State
         var items = [1, 2, 3]
+        
+        var dragGesture = DragGesture()
         
         var body: some View {
             VStack {
@@ -235,16 +377,12 @@ struct SwiftUIBackedScrollGrid_Previews: PreviewProvider {
                     .padding()
                     .zIndex(1)
                 
-                SwiftUIBackedScrollGrid(
+                InfiniteSnappingScrollGrid(
                     referenceRows: $items,
                     identifierKeyPath: \.self,
                     alignment: .vertical
                 ) { item, index in
-                    Text(String(item))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .padding()
-                        .background(Color(.systemBackground))
-                        .border(.red)
+                    Item(value: item)
                 } itemBefore: { item in
                     item - 1
                 } itemAfter: { item in
@@ -257,3 +395,4 @@ struct SwiftUIBackedScrollGrid_Previews: PreviewProvider {
         }
     }
 }
+
